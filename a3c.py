@@ -174,16 +174,6 @@ class ActorCritic(nn.Module):
         self.n_discrete = n_discrete
         self.n_continuous = n_continuous
 
-        # # self.pi: policy, self.v: value networks sigma
-        # self.pi_discrete1 = nn.Linear(input_dim, 128)
-        # self.pi_continuous1 = nn.Linear(input_dim, 128)
-        # self.v1 = nn.Linear(input_dim, 128)
-
-        # self.pi_continuous_mu = nn.Linear(128, n_continuous)
-        # self.pi_continuous_kappa = nn.Linear(128, n_continuous)
-        # self.pi_discrete = nn.Linear(128, n_discrete)
-        # self.v = nn.Linear(128, 1)
-
         self.pi_continuous_mu = nn.Sequential(
             nn.Linear(128,64),
             nn.ReLU(),
@@ -206,7 +196,6 @@ class ActorCritic(nn.Module):
         )
 
         # Initialise weights and biases, set to normal distribution
-        #set_init([self.feature_extractor[0], self.feature_extractor[2], self.pi_discrete1, self.pi_continuous1, self.v1, self.pi_continuous_mu, self.pi_continuous_kappa, self.pi_discrete, self.v])
         set_init([self.feature_extractor[0], self.feature_extractor[2],
                   self.pi_continuous_mu[0], self.pi_continuous_mu[2],
                   self.pi_continuous_kappa[0], self.pi_continuous_kappa[2],
@@ -235,9 +224,6 @@ class ActorCritic(nn.Module):
         if state.dim() == 1:
             state = state.unsqueeze(0)
         feature = self.feature_extractor(state)
-        # pi_discrete1 = F.relu(self.pi_discrete1(feature))
-        # pi_continuous1 = F.relu(self.pi_continuous1(feature))
-        # v1 = F.relu(self.v1(feature))
 
         # Discrete action logits
         pi_discrete_logits = self.pi_discrete(feature)
@@ -269,8 +255,7 @@ class ActorCritic(nn.Module):
         '''
         states = torch.tensor(self.states, dtype=torch.float)
         _, _, _, v = self.forward(states)
-        
-        # 
+
         R = v[-1]*(1-int(done))
 
         episode_return = []
@@ -286,8 +271,6 @@ class ActorCritic(nn.Module):
 
     def calc_loss(self, done):
         states = torch.tensor(self.states, dtype=torch.float)
-        #discrete_actions = torch.tensor([action[:self.n_discrete].float() for action in self.actions])
-        #continuous_actions = torch.tensor([action[self.n_discrete:] for action in self.actions], dtype=torch.float)
         discrete_actions = torch.stack([
             torch.tensor(action[:self.n_discrete], dtype=torch.float)
             for action in self.actions
@@ -303,7 +286,7 @@ class ActorCritic(nn.Module):
         values = values.squeeze() # ensure dimensions matches with returns
         
         # Loss function of critic (target(~G(t))-V)**2
-        #critic_loss = (returns-values)**2
+        
         critic_loss = F.mse_loss(returns, values)
         # Loss function of actor
         '''
@@ -330,8 +313,6 @@ class ActorCritic(nn.Module):
         # Compute actor loss       
         actor_loss = -torch.mean((discrete_log_probs.sum(dim=1)+continuous_log_probs.sum(dim=1))*(returns-values)) # negative sign since optimisers minimise loss by default but this is gradient ascent
         # have to sum the loss because of the way that backpropagation is handled by torch
-        # entropy_discrete = -torch.mean(probs*torch.log(probs+1e-10))
-        # entropy_continuous = -torch.mean(m.entropy())
         total_loss = critic_loss + actor_loss #- 0.01 * (entropy_discrete + entropy_continuous)
         
         return total_loss
@@ -353,14 +334,11 @@ class ActorCritic(nn.Module):
                 np.random.randint(0, 2), 
                 dtype=torch.float
             ).unsqueeze(0)
-            #print('discrete_action shape: (1)', discrete_action.shape)
         else:
             # Greedy action selection
             disc_probs = F.softmax(pi_discrete_logits, dim=1)
             disc = Categorical(probs=disc_probs)
             discrete_action = disc.sample().float()
-            #print('discrete_action shape: (2)', discrete_action.shape)
-
 
         # Continuous space
         # Use .squeeze(0) to ensure mu and sigma are 1D tensors matching n_continuous
@@ -392,9 +370,7 @@ class Worker(mp.Process):
         t_step = 1
         
         while self.episode_idx.value < self.N_GAMES:
-            #current_epsilon = self.local_actor_critic.decay_epsilon(self.episode_idx.value)
             print(f"{self.name}: Starting episode {self.episode_idx.value}")
-            #print(f"{self.name}: Episode {self.episode_idx.value}, Epsilon: {current_epsilon}")
             done = False
             observation = self.env.reset()
             score = 0
@@ -404,7 +380,6 @@ class Worker(mp.Process):
             current_step = 0
             while not done and current_step < max_steps:
                 action = self.local_actor_critic.get_action(observation)
-                #print(f"Action: {action}")
                 observation_, reward, done = self.env.play_step(action)
                 score += reward
                 self.local_actor_critic.remember(observation, action, reward)
@@ -419,15 +394,6 @@ class Worker(mp.Process):
                         global_param._grad = local_param.grad
                     self.optimiser.step()
                     self.local_actor_critic.load_state_dict(self.global_actor_critic.state_dict())
-                    # # prevent simultaneous updates of global model by multiple workers
-                    # with self.global_lock:
-                    #     # synchronise gradient of local model to global model
-                    #     for local_param, global_param in zip(self.local_actor_critic.parameters(),self.global_actor_critic.parameters()):
-                    #         global_param._grad = local_param.grad
-                    #     # updates parameters of global model using gradients assigned in previous step
-                    #     self.optimiser.step()
-                    #     # synchronise local model parameters with updated paramaters of global model
-                    #     self.local_actor_critic.load_state_dict(self.global_actor_critic.state_dict())
                     self.local_actor_critic.clear_memory()
                 current_step += 1
                 t_step += 1
