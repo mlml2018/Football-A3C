@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch.distributions import Categorical, Normal
 import numpy as np
 import os
-from football_game_ai import Football_Game
 
 class RunningMeanStd:
     # Dynamically tracks the mean and variance of the observations
@@ -225,8 +224,7 @@ def normalize_obs(obs, obs_rms):
     obs_rms.update(np.array([obs]))
     return np.clip((obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8), -10.0, 10.0)
 
-def train():
-    env = Football_Game()
+def train_ppo(env):
     agent = PPOAgent()
     
     num_updates = 100000
@@ -299,14 +297,11 @@ def train():
             
             # Save checkpoint regularly
             if update % 5 == 0:
-                os.makedirs('../models', exist_ok=True)
-                agent.save('../models/football_ppo_model.pth', obs_rms)
+                os.makedirs('models', exist_ok=True)
+                agent.save('models/football_ppo_model.pth', obs_rms)
                 
     except KeyboardInterrupt:
         print("\nTraining interrupted by user (Ctrl+C). Saving current model state...")
-        os.makedirs('../models', exist_ok=True)
-        agent.save('../models/football_ppo_model.pth', obs_rms)
+        os.makedirs('models', exist_ok=True)
+        agent.save('models/football_ppo_model.pth', obs_rms)
         print("Model saved successfully. Exiting.")
-                
-if __name__ == '__main__':
-    train()

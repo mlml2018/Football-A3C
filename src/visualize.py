@@ -1,22 +1,26 @@
 import torch
 import os
-from ppo import PPOAgent, RunningMeanStd
+import sys
+import argparse
 import numpy as np
 import time
+
+# Add the src folder to Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from agents.ppo import PPOAgent, RunningMeanStd
+
 
 # Use the fixed visualisation environment
 from football_game_ai_visualisation import Football_Game_Visualisation
 
-def evaluate_model(checkpoint_path, num_episodes=5):
+def evaluate_ppo(env, checkpoint_path, num_episodes=5):
     """
-    Load a saved model and evaluate its performance with rendering
+    Load a saved PPO model and evaluate its performance with rendering
     """
     if not os.path.exists(checkpoint_path):
-        print(f"Model not found at {checkpoint_path}")
+        print(f"PPO Model not found at {checkpoint_path}")
         return
-        
-    # Create environment
-    env = Football_Game_Visualisation()
     
     # Init agent and load
     agent = PPOAgent()
@@ -52,6 +56,23 @@ def evaluate_model(checkpoint_path, num_episodes=5):
             
         print(f"Episode {episode + 1}: Total Reward = {total_reward}")
 
+def main():
+    parser = argparse.ArgumentParser(description="Football AI Visualization Entry Point")
+    parser.add_argument('--algo', type=str, default='ppo', choices=['ppo', 'dqn', 'a3c'], 
+                        help='The reinforcement learning algorithm to visualize')
+    args = parser.parse_args()
+
+    # Create environment
+    env = Football_Game_Visualisation()
+    
+    if args.algo == 'ppo':
+        model_path = 'models/football_ppo_model.pth'
+        print(f"Visualizing PPO using model from {model_path}...")
+        evaluate_ppo(env, model_path)
+    elif args.algo == 'dqn':
+        print("DQN visualization not yet implemented. Please implement in visualize.py")
+    elif args.algo == 'a3c':
+        print("A3C visualization not yet implemented. Please implement in visualize.py")
+
 if __name__ == "__main__":
-    model_path = '../models/football_ppo_model.pth'
-    evaluate_model(model_path)
+    main()
