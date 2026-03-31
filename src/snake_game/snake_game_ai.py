@@ -4,8 +4,11 @@ from enum import Enum
 from collections import namedtuple
 import numpy as np
 
+import os
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'assets')
+
 pygame.init()
-font = pygame.font.Font('arial.ttf', 25)
+font = pygame.font.Font(os.path.join(ASSETS_DIR, 'arial.ttf'), 25)
 #font = pygame.font.SysFont('arial', 25)
 
 class Direction(Enum):

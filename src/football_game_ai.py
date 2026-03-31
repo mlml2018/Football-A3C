@@ -18,6 +18,11 @@ class Football_Game:
         self.defender_vel = int(2.4*2)
         # Ball vel
         self.passing_vel = 4.5*2
+        
+        # Max steps per episode to prevent infinite dribbling
+        self.max_steps = 1000
+        self.current_step = 0
+        
         self.reset()
 
     
@@ -48,8 +53,11 @@ class Football_Game:
         # speed x, speed y, ball passed boolean
         self.pass_info = np.array([0, 0, False])
         self.possess = np.array([False,False,False,False])
+        
+        self.current_step = 0
 
-        return self.player_ball_loc[:2,:].T.flatten()
+        state = self.player_ball_loc[:2,:].T.flatten()
+        return state / 1000.0
     
 
     def possess_ball(self):
@@ -73,34 +81,37 @@ class Football_Game:
                     self.player_ball_loc[0][-1] = self.player_ball_loc[0][i] + 20
                     self.player_ball_loc[1][-1] = self.player_ball_loc[1][i] + 20
 
+    def get_dx_dy(self, move_action, vel):
+        if move_action == 0:
+            return 0, 0
+        angle = (move_action - 1) * np.pi / 4
+        dx = np.sin(angle) * vel
+        dy = -np.cos(angle) * vel
+        return dx, dy
+
     def pass_ball(self, action):
+        pass_action = action[2]
         for i in range(2):
             if np.hypot(self.player_ball_loc[0][i]+10-self.player_ball_loc[0][-1],self.player_ball_loc[1][i]+25-self.player_ball_loc[1][-1]) < 20:    
-                if action[-4]:  # pass
-                    self.pass_info[0] = np.sin(action[-1])*self.passing_vel
-                    self.pass_info[1] = np.cos(action[-1])*self.passing_vel
+                if pass_action > 0:  # pass
+                    dx, dy = self.get_dx_dy(pass_action, self.passing_vel)
+                    self.pass_info[0] = dx
+                    self.pass_info[1] = dy
                     self.player_ball_loc[-1][i] = True
                     self.pass_info[-1] = True
-            # elif np.hypot(self.player_ball_loc[0][i+2]+10-self.player_ball_loc[0][-1],self.player_ball_loc[1][i+2]+25-self.player_ball_loc[1][-1]) < 20:
-            #     dist = np.hypot(self.w-40-self.player_ball_loc[0][-1], self.h/2-self.player_ball_loc[1][-1])
-            #     self.pass_info[0] = (self.w-40-self.player_ball_loc[0][-1])/dist*self.passing_vel
-            #     self.pass_info[1] = (self.h/2-self.player_ball_loc[1][-1])/dist*self.passing_vel
-            #     self.player_ball_loc[-1][i+2] = True
-            #     self.pass_info[-1] = True
         if self.pass_info[-1]:
             self.possess = np.array([False,False,False,False])
             self.player_ball_loc[0][-1] += self.pass_info[0]
-            self.player_ball_loc[1][-1] -= self.pass_info[1]
+            self.player_ball_loc[1][-1] += self.pass_info[1]
 
     def player1_movement(self, action):
-        possess_ball = self.possess[0]
+        p1_action = action[0]
+        vel = self.player_vel*3/5 if self.possess[0] else self.player_vel
+        dx, dy = self.get_dx_dy(p1_action, vel)
+        
         # Update player location
-        if possess_ball:
-            self.player_ball_loc[0][0] += np.sin(action[-3]) * self.player_vel*3/5
-            self.player_ball_loc[1][0] -= np.cos(action[-3]) * self.player_vel*3/5
-        else:
-            self.player_ball_loc[0][0] += np.sin(action[-3]) * self.player_vel
-            self.player_ball_loc[1][0] -= np.cos(action[-3]) * self.player_vel
+        self.player_ball_loc[0][0] += dx
+        self.player_ball_loc[1][0] += dy
         
         if self.player_ball_loc[0][0] <= 40 - self.player_width:
             self.player_ball_loc[0][0] = 40 - self.player_width
@@ -112,16 +123,13 @@ class Football_Game:
             self.player_ball_loc[1][0] = 720
     
     def player2_movement(self, action):
-        possess_ball = self.possess[1]
+        p2_action = action[1]
+        vel = self.player_vel*3/5 if self.possess[1] else self.player_vel
+        dx, dy = self.get_dx_dy(p2_action, vel)
 
         # Update player location
-        if possess_ball:
-            self.player_ball_loc[0][1] += np.sin(action[-2]) * self.player_vel*3/5
-            self.player_ball_loc[1][1] -= np.cos(action[-2]) * self.player_vel*3/5
-        else:
-            self.player_ball_loc[0][1] += np.sin(action[-2]) * self.player_vel
-            self.player_ball_loc[1][1] -= np.cos(action[-2]) * self.player_vel
-
+        self.player_ball_loc[0][1] += dx
+        self.player_ball_loc[1][1] += dy
 
         if self.player_ball_loc[0][1] <= 40 - self.player_width:
             self.player_ball_loc[0][1] = 40 - self.player_width
@@ -210,48 +218,64 @@ class Football_Game:
                 pygame.quit()
                 quit()
 
-        # 2. Observe current state, check possession of ball and reward accordingly - makes pass not preferrable
-        reward = 0
-
-        # reward if pass is successful
-        if self.possess[self.ball_possess_boolean]:
-            reward += 20
-
-        # if ball close to the goal post increase reward
-        ball_to_post = np.hypot(self.player_ball_loc[0][-1]-40, self.player_ball_loc[1][-1]-self.h/2)
-        if ball_to_post > 0:
-            reward += 100/ball_to_post
-        player1_to_post = np.hypot(self.player_ball_loc[0][0]-40, self.player_ball_loc[1][0]-self.h/2)
-        if player1_to_post > 0:
-            reward += 100/player1_to_post
-        player2_to_post = np.hypot(self.player_ball_loc[0][1]-40, self.player_ball_loc[1][1]-self.h/2)
-        if player2_to_post > 0:
-            reward += 100/player2_to_post
+        # 2. Observe current state, check possession of ball and reward accordingly
+        reward = -0.01 # Small stagnation penalty to encourage movement
         
+        # Calculate old distances to goal
+        old_ball_to_post = np.hypot(self.player_ball_loc[0][-1]-40, self.player_ball_loc[1][-1]-self.h/2)
+        old_player1_to_ball = np.hypot(self.player_ball_loc[0][0]-self.player_ball_loc[0][-1], self.player_ball_loc[1][0]-self.player_ball_loc[1][-1])
+
         # 3. move/pass
         self.possess_ball()
         self.player1_movement(action)
         self.player2_movement(action)
-        self.defender1_movement()
-        self.defender2_movement()
+        
+        # PHASE 1 CURRICULUM: Disable defenders
+        # self.defender1_movement()
+        # self.defender2_movement()
+        
         self.pass_ball(action)
+        
+        # New distances
+        new_ball_to_post = np.hypot(self.player_ball_loc[0][-1]-40, self.player_ball_loc[1][-1]-self.h/2)
+        new_player1_to_ball = np.hypot(self.player_ball_loc[0][0]-self.player_ball_loc[0][-1], self.player_ball_loc[1][0]-self.player_ball_loc[1][-1])
+
+        # Dense Rewards:
+        # Distance penalty/reward for ball approaching goal
+        reward += (old_ball_to_post - new_ball_to_post) * 0.2
+        
+        # Possession reward
+        if self.possess[0] or self.possess[1]:
+            reward += 0.5 # Constant reward for holding the ball
+            
+        # Reward for player getting closer to ball if neither possess it
+        if not (self.possess[0] or self.possess[1]):
+            reward += (old_player1_to_ball - new_player1_to_ball) * 0.1
         
         # 4. check if game over
         game_over = False
-        next_state = self.player_ball_loc[:2,:].T.flatten()
-        if self.goal() or self.own_goal() or self.line_out() or self.defender_ball():
+        self.current_step += 1
+        
+        state = self.player_ball_loc[:2,:].T.flatten()
+        next_state = state / 1000.0
+        
+        # PHASE 1 CURRICULUM: Ignore defender_ball condition
+        if self.goal() or self.own_goal() or self.line_out(): # or self.defender_ball():
             game_over = True
             if self.goal():
-                reward += 30
+                reward += 100.0 # Huge reward for scoring
                 return next_state, reward, game_over
             elif self.own_goal():
-                reward -= 10
+                reward -= 50.0
                 return next_state, reward, game_over
             elif self.line_out():
-                reward -= 2
-            else: # line out or defender ball
-                reward -= 20
+                reward -= 10.0
                 return next_state, reward, game_over
+                
+        # Time out
+        if self.current_step >= self.max_steps:
+            game_over = True
+            return next_state, reward, game_over
         
         # 5. return next state, reward, game over boolean
         return next_state, reward, game_over

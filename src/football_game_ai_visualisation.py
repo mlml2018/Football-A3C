@@ -4,11 +4,13 @@ import numpy as np
 class Football_Game_Visualisation:
     
     def __init__(self, w=1130, h=760):
+        import os
+        ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets')
 
-        self.ballImg = pygame.transform.scale(pygame.image.load('football.png'), (8, 8))
-        self.playerImg = pygame.transform.scale(pygame.image.load('player.png'), (23, 23))
-        self.defenderImg = pygame.transform.scale(pygame.image.load('defender.png'), (23, 23))
-        self.goalImg = pygame.image.load('goal-box-with-net.png')
+        self.ballImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'football.png')), (8, 8))
+        self.playerImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'player.png')), (23, 23))
+        self.defenderImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'defender.png')), (23, 23))
+        self.goalImg = pygame.image.load(os.path.join(ASSETS_DIR, 'goal-box-with-net.png'))
 
         self.w = w
         self.h = h
@@ -59,7 +61,8 @@ class Football_Game_Visualisation:
         self.pass_info = np.array([0, 0, False])
         self.possess = np.array([False,False,False,False])
 
-        return self.player_ball_loc[:2,:].T.flatten()
+        state = self.player_ball_loc[:2,:].T.flatten()
+        return state / 1000.0
 
         
     def _update_ui(self):
@@ -135,35 +138,37 @@ class Football_Game_Visualisation:
                     self.player_ball_loc[0][-1] = self.player_ball_loc[0][i] + 20
                     self.player_ball_loc[1][-1] = self.player_ball_loc[1][i] + 20
 
+    def get_dx_dy(self, move_action, vel):
+        if move_action == 0:
+            return 0, 0
+        angle = (move_action - 1) * np.pi / 4
+        dx = np.sin(angle) * vel
+        dy = -np.cos(angle) * vel
+        return dx, dy
+
     def pass_ball(self, action):
+        pass_action = action[2]
         for i in range(2):
             if np.hypot(self.player_ball_loc[0][i]+10-self.player_ball_loc[0][-1],self.player_ball_loc[1][i]+25-self.player_ball_loc[1][-1]) < 20:    
-                if action[-4]:  # pass
-                    self.pass_info[0] = np.sin(action[-1])*self.passing_vel
-                    self.pass_info[1] = np.cos(action[-1])*self.passing_vel
+                if pass_action > 0:  # pass
+                    dx, dy = self.get_dx_dy(pass_action, self.passing_vel)
+                    self.pass_info[0] = dx
+                    self.pass_info[1] = dy
                     self.player_ball_loc[-1][i] = True
                     self.pass_info[-1] = True
-            # elif np.hypot(self.player_ball_loc[0][i+2]+10-self.player_ball_loc[0][-1],self.player_ball_loc[1][i+2]+25-self.player_ball_loc[1][-1]) < 20:
-            #     dist = np.hypot(self.w-40-self.player_ball_loc[0][-1], self.h/2-self.player_ball_loc[1][-1])
-            #     self.pass_info[0] = (self.w-40-self.player_ball_loc[0][-1])/dist*self.passing_vel
-            #     self.pass_info[1] = (self.h/2-self.player_ball_loc[1][-1])/dist*self.passing_vel
-            #     self.player_ball_loc[-1][i+2] = True
-            #     self.pass_info[-1] = True
         if self.pass_info[-1]:
             self.possess = np.array([False,False,False,False])
             self.player_ball_loc[0][-1] += self.pass_info[0]
-            self.player_ball_loc[1][-1] -= self.pass_info[1]
+            self.player_ball_loc[1][-1] += self.pass_info[1]
 
     def player1_movement(self, action):
-        possess_ball = self.possess[0]
+        p1_action = action[0]
+        vel = self.player_vel*3/5 if self.possess[0] else self.player_vel
+        dx, dy = self.get_dx_dy(p1_action, vel)
         
         # Update player location
-        if possess_ball:
-            self.player_ball_loc[0][0] += np.sin(action[-3]) * self.player_vel*3/5
-            self.player_ball_loc[1][0] -= np.cos(action[-3]) * self.player_vel*3/5
-        else:
-            self.player_ball_loc[0][0] += np.sin(action[-3]) * self.player_vel
-            self.player_ball_loc[1][0] -= np.cos(action[-3]) * self.player_vel
+        self.player_ball_loc[0][0] += dx
+        self.player_ball_loc[1][0] += dy
     
         if self.player_ball_loc[0][0] <= 40 - self.player_width:
             self.player_ball_loc[0][0] = 40 - self.player_width
@@ -175,15 +180,13 @@ class Football_Game_Visualisation:
             self.player_ball_loc[1][0] = 720
     
     def player2_movement(self, action):
-        possess_ball = self.possess[1]
+        p2_action = action[1]
+        vel = self.player_vel*3/5 if self.possess[1] else self.player_vel
+        dx, dy = self.get_dx_dy(p2_action, vel)
 
         # Update player location
-        if possess_ball:
-            self.player_ball_loc[0][1] += np.sin(action[-2]) * self.player_vel*3/5
-            self.player_ball_loc[1][1] -= np.cos(action[-2]) * self.player_vel*3/5
-        else:
-            self.player_ball_loc[0][1] += np.sin(action[-2]) * self.player_vel
-            self.player_ball_loc[1][1] -= np.cos(action[-2]) * self.player_vel
+        self.player_ball_loc[0][1] += dx
+        self.player_ball_loc[1][1] += dy
 
 
         if self.player_ball_loc[0][1] <= 40 - self.player_width:
@@ -303,14 +306,20 @@ class Football_Game_Visualisation:
         self.possess_ball()
         self.player1_movement(action)
         self.player2_movement(action)
-        self.defender1_movement()
-        self.defender2_movement()
+        
+        # PHASE 1 CURRICULUM: Disable defenders visually
+        # self.defender1_movement()
+        # self.defender2_movement()
+        
         self.pass_ball(action)
         
         # 4. check if game over
         game_over = False
-        next_state = self.player_ball_loc[:2,:].T.flatten()
-        if self.goal() or self.own_goal() or self.line_out() or self.defender_ball():
+        state = self.player_ball_loc[:2,:].T.flatten()
+        next_state = state / 1000.0
+        
+        # PHASE 1 CURRICULUM: Ignore defender ball visually
+        if self.goal() or self.own_goal() or self.line_out(): # or self.defender_ball():
             game_over = True
             if self.goal():
                 reward += 10

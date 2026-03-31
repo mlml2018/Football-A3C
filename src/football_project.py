@@ -33,10 +33,13 @@ keeper_height = 18
 ball_width = 8
 ball_height = 8
 
-ballImg = pygame.transform.scale(pygame.image.load('football.png'), (ball_width, ball_height))
-playerImg = pygame.transform.scale(pygame.image.load('player.png'), (player_width, player_height))
-defenderImg = pygame.transform.scale(pygame.image.load('defender.png'), (player_width, player_height))
-keeperImg = pygame.transform.scale(pygame.image.load('goalkeeper.png'),
+import os
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets')
+
+ballImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'football.png')), (ball_width, ball_height))
+playerImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'player.png')), (player_width, player_height))
+defenderImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'defender.png')), (player_width, player_height))
+keeperImg = pygame.transform.scale(pygame.image.load(os.path.join(ASSETS_DIR, 'goalkeeper.png')),
                                    (keeper_width, keeper_height))
 
 def player(x, y):
@@ -300,7 +303,7 @@ def goal(player_loc, pass_and_shoot):
         pass_and_shoot[1][-1] = False
 
 # Goal
-goalImg = pygame.image.load('goal-box-with-net.png')
+goalImg = pygame.image.load(os.path.join(ASSETS_DIR, 'goal-box-with-net.png'))
 
 # Draw Windows
 def draw_window():
